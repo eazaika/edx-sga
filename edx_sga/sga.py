@@ -26,6 +26,7 @@ from django.template import Context, Template
 from django.utils.encoding import force_text
 from django.utils.timezone import now as django_now
 from django.utils.translation import ugettext as _
+from django.contrib.auth.models import User
 from edx_sga.constants import ITEM_TYPE
 from edx_sga.showanswer import ShowAnswerXBlockMixin
 from edx_sga.tasks import (get_zip_file_name, get_zip_file_path,
@@ -987,7 +988,14 @@ class StaffGradedAssignmentXBlock(StudioEditableXBlockMixin, ShowAnswerXBlockMix
     def get_real_user(self):
         """returns session user"""
         # pylint: disable=no-member
-        return self.runtime.get_real_user(self.xmodule_runtime.anonymous_student_id)
+        if callable(self.runtime.get_real_user):
+            real_user_object = self.runtime.get_real_user(self.xmodule_runtime.anonymous_student_id)
+        else:
+            try:
+                real_user_object = User.objects.get(id=self.runtime.user_id)
+            except User.DoesNotExist:
+                return False
+        return real_user_object
 
     def correctness_available(self):
         """

@@ -36,8 +36,8 @@ def is_finalized_submission(submission_data):
     Helper function to determine whether or not a Submission was finalized by the student
     """
     if submission_data and submission_data.get('answer') is not None:
-        return submission_data['answer'].get('filename')
-    return None
+        return submission_data['answer'].get('finalized')
+    return False
 
 
 def get_file_modified_time_utc(file_path):

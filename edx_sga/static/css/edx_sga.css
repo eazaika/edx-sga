@@ -82,6 +82,14 @@
     cursor: pointer;
 }
 
+.disabled-link {
+    pointer-events: none;
+    color: #888;
+    background-color: #f7f7f7;
+    background-image: -webkit-linear-gradient(#f7f7f7, #d9d1d1);
+    background-image: linear-gradient(#f7f7f7, #d9d1d1);
+}
+
 .sga-block .upload .fileupload {
     display: none;
 }

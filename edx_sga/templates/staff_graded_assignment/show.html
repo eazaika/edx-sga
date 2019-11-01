@@ -41,11 +41,6 @@
             {% trans "This assignment has not yet been graded." %}
           <% } %>
         </p>
-        <% if (upload_allowed) { %>
-          <p>
-            <a class="button finalize-upload">Submit</a>
-          </p>
-        <% } %>
       </div>
     <% } %>
     <% if (solution) { %>
@@ -70,7 +65,7 @@
         <th class="header">{% trans "Name" %} <i class="icon fa fa-sort"/></th>
         <th class="header">{% trans "Filename" %} <i class="icon fa fa-sort"/></th>
         <th class="header">{% trans "Uploaded" %} <i class="icon fa fa-sort"/></th>
-        <th class="header">{% trans "Submitted" %} <i class="icon fa fa-sort"/></th>
+        <th class="header">{% trans "Finalized" %} <i class="icon fa fa-sort"/></th>
         <th class="header">{% trans "Grade" %} <i class="icon fa fa-sort"/></th>
         <th class="header">{% trans "Instructor's comments" %} <i class="icon fa fa-sort"/></th>
         <th class="header">{% trans "Annotated" %} <i class="icon fa fa-sort"/></th>
@@ -95,7 +90,7 @@
             <% if (assignment.finalized) { %>
               {% trans "Yes" %}
             <% } else { %>
-              {% trans "No" %}
+              <a class="button finalize-upload" id="finalize">{% trans "Finalize" %}</a>
             <% } %>
           </td>
           <td>

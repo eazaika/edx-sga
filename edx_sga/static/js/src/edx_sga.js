@@ -33,19 +33,6 @@ function StaffGradedAssignmentXBlock(runtime, element) {
             // Render template
             var content = $(element).find('#sga-content').html(template(state));
 
-            $(content).find('.finalize-upload').on('click', function() {
-              $.post(finalizeUploadUrl).success(
-                  function (state) {
-                      render(state);
-                  }
-              ).fail(
-                  function () {
-                      state.error = gettext('Submission failed. Please contact your course instructor.');
-                      render(state);
-                  }
-              );
-            });
-
             // Set up file upload
             var fileUpload = $(content).find('.fileupload').fileupload({
                 url: uploadUrl,
@@ -148,6 +135,16 @@ function StaffGradedAssignmentXBlock(runtime, element) {
               $(element).find('#grade-info #row-' + assignment.module_id).data(assignment);
             });
 
+            $('#finalize').on('click', function() {
+                $(this).addClass('disabled-link');
+                var row = $(this).parents("tr");
+                var url = finalizeUploadUrl + '?module_id=' +
+                    row.data('module_id') + '&submission_id=' +
+                    row.data('submission_id') + '&student_id=' +
+                    row.data('student_id');
+                $.post(url).success(renderStaffGrading);
+            });
+
             // Set up grade entry modal
             $(element).find('.enter-grade-button')
                 .leanModal({closeButton: '#enter-grade-cancel'})
@@ -242,9 +239,7 @@ function StaffGradedAssignmentXBlock(runtime, element) {
                 var max_score = row.parents('#grade-info').data('max_score');
                 var score = Number(form.find('#grade-input').val());
                 event.preventDefault();
-                if (!score) {
-                    gradeFormError('<br/>'+gettext('Grade must be a number.'));
-                } else if (score !== parseInt(score)) {
+                if (score !== parseInt(score)) {
                     gradeFormError('<br/>'+gettext('Grade must be an integer.'));
                 } else if (score < 0) {
                     gradeFormError('<br/>'+gettext('Grade must be positive.'));

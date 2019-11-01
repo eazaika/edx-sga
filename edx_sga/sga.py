@@ -32,7 +32,7 @@ from edx_sga.tasks import (get_zip_file_name, get_zip_file_path,
                            zip_student_submissions)
 from edx_sga.utils import (file_contents_iter, get_file_modified_time_utc,
                            get_file_storage_path, get_sha1,
-                           is_finalized_submission, utcnow)
+                           is_finalized_submission, utcnow, utc_to_local)
 from lms.djangoapps.courseware.models import StudentModule
 from safe_lxml import etree
 from student.models import user_by_anonymous_id
@@ -50,6 +50,7 @@ from xmodule.util.duedate import get_extended_due_date
 
 log = logging.getLogger(__name__)
 
+DATETIME_FORMAT = '%d-%m-%Y %H:%M MSK'
 
 def reify(meth):
     """
@@ -828,8 +829,8 @@ class StaffGradedAssignmentXBlock(StudioEditableXBlockMixin, ShowAnswerXBlockMix
                     'username': student_module.student.username,
                     'fullname': student_module.student.profile.name,
                     'filename': submission['answer']["filename"],
-                    'timestamp': submission['created_at'].strftime(
-                        DateTime.DATETIME_FORMAT
+                    'timestamp': utc_to_local(submission['created_at']).strftime(
+                        DATETIME_FORMAT
                     ),
                     'score': score,
                     'approved': approved,

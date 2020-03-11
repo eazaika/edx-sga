@@ -28,17 +28,24 @@
           <a href="<%= downloadUrl %>"><%= uploaded.filename %></a>
         </p>
         <p>
+          <% if (answer_checked) { %>
+          <b>{% trans "Answer already checked by instructor" %}</b><br/>
+          <% } else { %>
+          <b>{% trans "Answer not yet checked by instructor" %}</b><br/>
+          <% } %>
           <% if (graded) { %>
-            {% blocktrans %}Your score is <%= graded.score %> / <%= max_score %>{% endblocktrans %}<br/>
+          <b>{% trans "Your score is" %} <%= graded.score %> / <%= max_score %></b><br/>
+          <% } %>
+        </p>
+        <p>
+          <% if (graded) { %>
             <% if (graded.comment) { %>
-              <b>{% trans "Instructor comment" %}</b> <%= graded.comment %><br/>
+              <b>{% trans "Instructor comment:" %}</b> <%= graded.comment %><br/>
             <% } %>
             <% if (annotated) { %>
               <b>{% trans "Annotated file from instructor" %}</b>
               <a href="<%= annotatedUrl %>"><%= annotated.filename %></a><br/>
             <% } %>
-          <% } else if (uploaded) { %>
-            {% trans "This assignment has not yet been graded." %}
           <% } %>
         </p>
       </div>
@@ -65,7 +72,9 @@
         <th class="header">{% trans "Name" %} <i class="icon fa fa-sort"/></th>
         <th class="header">{% trans "Filename" %} <i class="icon fa fa-sort"/></th>
         <th class="header">{% trans "Uploaded" %} <i class="icon fa fa-sort"/></th>
+        <th class="header">{% trans "Fresh answer" %} <i class="icon fa fa-sort"/></th>
         <th class="header">{% trans "Finalized" %} <i class="icon fa fa-sort"/></th>
+        <th class="header">{% trans "Grade date" %} <i class="icon fa fa-sort"/></th>
         <th class="header">{% trans "Grade" %} <i class="icon fa fa-sort"/></th>
         <th class="header">{% trans "Instructor's comments" %} <i class="icon fa fa-sort"/></th>
         <th class="header">{% trans "Annotated" %} <i class="icon fa fa-sort"/></th>
@@ -87,12 +96,20 @@
           </td>
           <td><%= assignment.timestamp %></td>
           <td>
+            <% if (assignment.fresh) { %>
+              <div class="round green"></div>
+            <% } else { %>
+              <div class="round silver"></div>
+            <% } %>
+          </td>
+          <td>
             <% if (assignment.finalized) { %>
               {% trans "Yes" %}
             <% } else { %>
               <a class="button finalize-upload" id="finalize">{% trans "Finalize" %}</a>
             <% } %>
           </td>
+          <td><%= assignment.date_fin %></td>
           <td>
             <% if (assignment.score !== null) { %>
               <%= assignment.score %> /
@@ -139,13 +156,32 @@
        href="#grade-{{ id }}">{% trans "Grade Submissions" %}</a>
   </div>
 
+  <div hidden='true' class='waiting'>
+   {% trans "Please wait a few minutes, file is being uploaded." %}
+   <img id='spinner' src="{{ spinner_url }}" alt="spinner"  height="20" width="20">
+  </div>
+  {{ upload_grades_file_form.as_p }}
+  <div>
+    <a class="instructor-info-action button btn-download-all" href="#" id="upload-grades-button">{% trans "Upload Grades CSV File" %}</a>
+  </div>
+  <p>
+    <i>{%blocktrans%}Only fields Grade, Finalized and Comment should be changed.{%endblocktrans%}</i>
+  </p>
+  <div class="upload_grades_response"></div>
+
   <section aria-hidden="true" class="modal staff-modal" id="grade-{{ id }}" style="height: 75%" tabindex="-1">
     <div class="inner-wrapper" style="color: black; overflow: auto;">
-      <header><h2><span class="display_name">{{ display_name }}</span> - {% trans "Staff Graded Assignment" %}</h2></header>
-      <br/>
-      <div>
-        <a class="instructor-info-action button btn-download-all" href="#" id="download-init-button">{% trans "Download All Submissions" %}</a>
-      </div>
+      <header><h2><span class="display_name">{{ display_name }}</span> - {% trans "" %}</h2></header>
+      <table width=70%>
+        <tr>
+          <td><div>
+            <a class="instructor-info-action button btn-download-all" href="#" id="download-init-button">{% trans "Download All Submissions" %}</a>
+          </div></td>
+          <td><div>
+            <a class="instructor-info-action button btn-download-all" href="#" id="download-grades-button">{% trans "Download All Grades" %}</a>
+          </div></td>
+        </tr>
+      </table>
       <p class="task-message"></p>
       <div id="grade-info" style="display: block;">
         {% trans "Loading..." %}

@@ -1,0 +1,5 @@
+{% load i18n %}
+{% trans "The grades file contains errors, please fix them, and upload the file again." %}
+{% for field in upload_grades_file_form %} 
+    {{ field.errors }}
+{% endfor %} 

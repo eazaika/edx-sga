@@ -18,6 +18,7 @@ function StaffGradedAssignmentXBlock(runtime, element) {
         var downloadSubmissionsUrl = runtime.handlerUrl(element, 'download_submissions');
         var prepareDownloadSubmissionsUrl = runtime.handlerUrl(element, 'prepare_download_submissions');
         var downloadSubmissionsStatusUrl = runtime.handlerUrl(element, 'download_submissions_status');
+        var downloadGradesUrl = runtime.handlerUrl(element, 'download_grades');
         var template = _.template($(element).find("#sga-tmpl").text());
         var gradingTemplate;
         var preparingSubmissionsMsg = gettext(
@@ -142,7 +143,12 @@ function StaffGradedAssignmentXBlock(runtime, element) {
                     row.data('module_id') + '&submission_id=' +
                     row.data('submission_id') + '&student_id=' +
                     row.data('student_id');
-                $.post(url).success(renderStaffGrading);
+                $.post(url).success(renderStaffGrading).fail(
+                    function () {
+                        console.log('Submission failed. Please contact tech support.');
+                        finalizeError('<br/>'+gettext('Submission failed. Please contact tech support.'));
+                    }
+                );
             });
 
             // Set up grade entry modal
@@ -224,6 +230,11 @@ function StaffGradedAssignmentXBlock(runtime, element) {
             form.find('.error').html(error);
         }
 
+        function finalizeError(error) {
+            var form = $(element).find("#grade-info");
+            form.find('.error').html(error);
+        }
+
         /* Click event handler for "enter grade" */
         function handleGradeEntry() {
             var row = $(this).parents("tr");
@@ -294,6 +305,7 @@ function StaffGradedAssignmentXBlock(runtime, element) {
             });
         }
 
+
         function updateChangeEvent(fileUploadObj) {
             fileUploadObj.off('change').on('change', function (e) {
                 var that = $(this).data('blueimpFileupload'),
@@ -311,6 +323,9 @@ function StaffGradedAssignmentXBlock(runtime, element) {
                 });
             });
         }
+
+        var uploadGradesUrl = $(element).find('.upload_grades');
+        var xblock_selector = 'div[data-usage-id="' + element.dataset.usageId +  '"] ';
 
         $(function($) { // onLoad
             var block = $(element).find('.sga-block');
@@ -370,8 +385,64 @@ function StaffGradedAssignmentXBlock(runtime, element) {
                     }
                   );
                 });
+
+                $(element).find('#download-grades-button').click(function(e) {
+                  e.preventDefault();
+                  var self = this;
+                  $(self).addClass("disabled");
+                  window.location = downloadGradesUrl;
+                  $(self).removeClass("disabled");
+                });
+
+
+                $(element).find('#upload-grades-button').click(function(e) {
+
+                  var xhr = new XMLHttpRequest();
+                  var form = new FormData();
+                  var gradesFile = $(xblock_selector + '[name="grades_file"]');
+
+                  if (gradesFile.prop('files').length == 0)
+                      return;
+
+                  $(xblock_selector + '.waiting').show();
+
+                  xhr.open('POST', uploadGradesUrl);
+                  xhr.setRequestHeader("X-CSRFToken", csrftoken);
+
+                  form.append('file', gradesFile.prop('files')[0]);
+
+                  xhr.send(form);
+                  xhr.onload = DisplayUploadGradesResponse;
+
+                });
+
+              var uploadGradesUrl = runtime.handlerUrl(element, 'upload_grades');
+            }
+            var csrftoken = getCookie('csrftoken');
+            function DisplayUploadGradesResponse() {
+                $(xblock_selector + '.waiting').hide();
+                $(xblock_selector + '.upload_grades_response').html(this.response);
             }
         });
+
+
+        // Get the csrf token from the cookie (https://docs.djangoproject.com/en/1.4/ref/contrib/csrf/#ajax).
+        function getCookie(name) {
+            var cookieValue = null;
+            if (document.cookie && document.cookie != '') {
+                var cookies = document.cookie.split(';');
+                for (var i = 0; i < cookies.length; i++) {
+                    var cookie = jQuery.trim(cookies[i]);
+                    // Does this cookie string begin with the name we want?
+                    if (cookie.substring(0, name.length + 1) == (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+
 
         function pollSubmissionDownload() {
           pollUntilSuccess(downloadSubmissionsStatusUrl, checkResponse, 10000, 100).then(function() {
@@ -383,6 +454,30 @@ function StaffGradedAssignmentXBlock(runtime, element) {
               .addClass("ready-msg");
           }).fail(function() {
             $(element).find('#download-init-button').removeClass("disabled");
+            $(element).find('.task-message')
+              .show()
+              .html(
+                interpolate(
+                  gettext(
+                    'The download file was not created. Please try again or contact %(support_email)s'
+                  ),
+                  {support_email: $(element).find('.sga-block').attr("data-support-email")},
+                  true
+                )
+              );
+          });
+        }
+
+        function pollGradeDownload() {
+          pollUntilSuccess(downloadGradesStatusUrl, checkResponse, 10000, 100).then(function() {
+            $(element).find('#download-grades-button').removeClass("disabled");
+            $(element).find('.task-message')
+              .show()
+              .html(gettext("Student grade file ready for download"))
+              .removeClass("preparing-msg")
+              .addClass("ready-msg");
+          }).fail(function() {
+            $(element).find('#download-grade-button').removeClass("disabled");
             $(element).find('.task-message')
               .show()
               .html(

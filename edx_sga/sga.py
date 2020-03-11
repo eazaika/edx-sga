@@ -2,56 +2,74 @@
 This block defines a Staff Graded Assignment.  Students are shown a rubric
 and invited to upload a file which is then graded by staff.
 """
-from __future__ import absolute_import
-
 import json
 import logging
 import mimetypes
 import os
+import urllib
+import csv
+
 from contextlib import closing
 from zipfile import ZipFile
-
 import pkg_resources
-import six
-import six.moves.urllib.error
-import six.moves.urllib.parse
-import six.moves.urllib.request
-
 import pytz
-from django.conf import settings
-from django.core.exceptions import PermissionDenied
-from django.core.files import File
-from django.core.files.storage import default_storage
-from django.template import Context, Template
-from django.utils.encoding import force_text
-from django.utils.timezone import now as django_now
-from django.utils.translation import ugettext as _
+
+from opaque_keys.edx.keys import CourseKey
+from courseware.models import StudentModule  # lint-amnesty, pylint: disable=import-error
 from django.contrib.auth.models import User
+import datetime
+from django.conf import settings  # lint-amnesty, pylint: disable=import-error
+from django.core.exceptions import PermissionDenied  # lint-amnesty, pylint: disable=import-error
+from django.core.files import File  # lint-amnesty, pylint: disable=import-error
+from django.core.files.storage import default_storage  # lint-amnesty, pylint: disable=import-error
+from django.template import Context, Template  # lint-amnesty, pylint: disable=import-error
+from django.utils.encoding import force_text  # pylint: disable=import-error
+from django.utils.timezone import now as django_now  # pylint: disable=import-error
+from django.utils.translation import ugettext as _  # pylint: disable=import-error
+from safe_lxml import etree  # pylint: disable=import-error
+from student.models import user_by_anonymous_id, anonymous_id_for_user, get_user_by_username_or_email  # lint-amnesty, pylint: disable=import-error
+from submissions import api as submissions_api  # lint-amnesty, pylint: disable=import-error
+from submissions.models import (
+    Submission,
+    StudentItem as SubmissionsStudent
+)  # lint-amnesty, pylint: disable=import-error
+from webob.response import Response
+from xblock.core import XBlock  # lint-amnesty, pylint: disable=import-error
+from xblock.exceptions import JsonHandlerError  # lint-amnesty, pylint: disable=import-error
+from xblock.fields import DateTime, Scope, String, Float, Integer, Boolean  # lint-amnesty, pylint: disable=import-error
+from web_fragments.fragment import Fragment  # lint-amnesty, pylint: disable=import-error
+from xblockutils.studio_editable import StudioEditableXBlockMixin
+from xblockutils.resources import ResourceLoader
+from xmodule.util.duedate import get_extended_due_date  # lint-amnesty, pylint: disable=import-error
+from xmodule.contentstore.content import StaticContent
+
 from edx_sga.constants import ITEM_TYPE
 from edx_sga.showanswer import ShowAnswerXBlockMixin
-from edx_sga.tasks import (get_zip_file_name, get_zip_file_path,
-                           zip_student_submissions)
-from edx_sga.utils import (file_contents_iter, get_file_modified_time_utc,
-                           get_file_storage_path, get_sha1,
-                           is_finalized_submission, utcnow, utc_to_local)
-from lms.djangoapps.courseware.models import StudentModule
-from safe_lxml import etree
-from student.models import user_by_anonymous_id
-from submissions import api as submissions_api
-from submissions.models import StudentItem as SubmissionsStudent
-from submissions.models import Submission
-from webob.response import Response
-from xblock.core import XBlock
-from xblock.exceptions import JsonHandlerError
-from xblock.fields import DateTime, Float, Integer, Scope, String
-from xblock.fragment import Fragment
-from xblockutils.studio_editable import StudioEditableXBlockMixin
-from xmodule.contentstore.content import StaticContent
-from xmodule.util.duedate import get_extended_due_date
+from edx_sga.tasks import (
+    get_zip_file_name,
+    get_zip_file_path,
+    zip_student_submissions,
+    get_csv_file_name
+)
+from edx_sga.utils import (
+    get_sha1,
+    utcnow,
+    utc_to_local,
+    is_finalized_submission,
+    data_finalized,
+    get_file_modified_time_utc,
+    get_file_storage_path,
+    file_contents_iter,
+    freshen_answer,
+)
+from edx_sga.forms import UploadGradesFileForm
+
+DATETIME_FORMAT = '%d-%m-%Y %H:%M MSK'
+UNICODE_DATE_FORMAT = '%Y-%m-%d %H:%M:%S.%f+00:00'
 
 log = logging.getLogger(__name__)
 
-DATETIME_FORMAT = '%d-%m-%Y %H:%M MSK'
+loader = ResourceLoader(__name__)
 
 def reify(meth):
     """
@@ -81,7 +99,7 @@ class StaffGradedAssignmentXBlock(StudioEditableXBlockMixin, ShowAnswerXBlockMix
 
     display_name = String(
         display_name=_("Display Name"),
-        default=_('Staff Graded Assignment'),
+        default=_("Staff Graded Assignment"),
         scope=Scope.settings,
         help=_("This name appears in the horizontal navigation at the top of "
                "the page.")
@@ -92,6 +110,7 @@ class StaffGradedAssignmentXBlock(StudioEditableXBlockMixin, ShowAnswerXBlockMix
         help=_("Defines the number of points each problem is worth. "
                "If the value is not set, the problem is worth the sum of the "
                "option point values."),
+        default=0,
         values={"min": 0, "step": .1},
         scope=Scope.settings
     )
@@ -116,6 +135,13 @@ class StaffGradedAssignmentXBlock(StudioEditableXBlockMixin, ShowAnswerXBlockMix
         default='',
         scope=Scope.user_state,
         help=_("Feedback given to student by instructor.")
+    )
+
+    fresh = Boolean(
+        display_name=_("Answer not checked"),
+        default=False,
+        scope=Scope.user_state,
+        help=_("Flag: checked (False) or not (True) answer by instructor.")
     )
 
     annotated_sha1 = String(
@@ -258,21 +284,24 @@ class StaffGradedAssignmentXBlock(StudioEditableXBlockMixin, ShowAnswerXBlockMix
             )
         # Uploading an assignment represents a change of state with this user in this block,
         # so we need to ensure that the user has a StudentModule record, which represents that state.
-        self.get_or_create_student_module(user)
+        module = self.get_or_create_student_module(user)
         answer = {
             "sha1": sha1,
             "filename": upload.file.name,
             "mimetype": mimetypes.guess_type(upload.file.name)[0],
-            "finalized": False
+            "finalized": False,
+            "date_fin": None
         }
         student_item_dict = self.get_student_item_dict()
-        submissions_api.create_submission(student_item_dict, answer)
+        submission = submissions_api.create_submission(student_item_dict, answer)
         path = self.file_storage_path(sha1, upload.file.name)
         log.info("Saving file: %s at path: %s for user: %s", upload.file.name, path, user.username)
         if default_storage.exists(path):
             # save latest submission
             default_storage.delete(path)
         default_storage.save(path, File(upload.file))
+        freshen_answer(module, True)
+        self.fresh = True
         return Response(json_body=self.student_state())
 
     @XBlock.handler
@@ -288,8 +317,10 @@ class StaffGradedAssignmentXBlock(StudioEditableXBlockMixin, ShowAnswerXBlockMix
         submission = Submission.objects.get(uuid=uuid)
         if not submission.answer.get('finalized'):
             submission.answer['finalized'] = True
-            submission.submitted_at = django_now()
             submission.save()
+        module = self.get_student_module(request.params['module_id'])
+        freshen_answer(module, False)
+        self.fresh = False
         return Response(json_body=self.staff_grading_data())
 
     @XBlock.handler
@@ -313,11 +344,12 @@ class StaffGradedAssignmentXBlock(StudioEditableXBlockMixin, ShowAnswerXBlockMix
         state['annotated_filename'] = filename = upload.file.name
         state['annotated_mimetype'] = mimetypes.guess_type(upload.file.name)[0]
         state['annotated_timestamp'] = utcnow().strftime(
-            DateTime.DATETIME_FORMAT
+            DATETIME_FORMAT
         )
         path = self.file_storage_path(sha1, filename)
         if not default_storage.exists(path):
             default_storage.save(path, File(upload.file))
+        state['fresh'] = False
         module.state = json.dumps(state)
         module.save()
         log.info(
@@ -413,7 +445,7 @@ class StaffGradedAssignmentXBlock(StudioEditableXBlockMixin, ShowAnswerXBlockMix
         state = json.loads(module.state)
         try:
             score = int(score)
-        except ValueError:
+        except:
             score = 0
 
         if self.is_instructor():
@@ -422,6 +454,8 @@ class StaffGradedAssignmentXBlock(StudioEditableXBlockMixin, ShowAnswerXBlockMix
         else:
             state['staff_score'] = score
         state['comment'] = request.params.get('comment', '')
+        state['fresh'] = False
+        state['date_fin'] = force_text(django_now())
         module.state = json.dumps(state)
         module.save()
         log.info(
@@ -450,6 +484,7 @@ class StaffGradedAssignmentXBlock(StudioEditableXBlockMixin, ShowAnswerXBlockMix
         state = json.loads(module.state)
         state['staff_score'] = None
         state['comment'] = ''
+        state['date_fin'] = None
         state['annotated_sha1'] = None
         state['annotated_filename'] = None
         state['annotated_mimetype'] = None
@@ -469,12 +504,11 @@ class StaffGradedAssignmentXBlock(StudioEditableXBlockMixin, ShowAnswerXBlockMix
         """
         Runs a async task that collects submissions in background and zip them.
         """
-        # pylint: disable=no-member
         require(self.is_course_staff())
         user = self.get_real_user()
         require(user)
         zip_file_ready = False
-        location = six.text_type(self.location)
+        location = unicode(self.location)
 
         if self.is_zip_file_available(user):
             log.info("Zip file already available for block: %s for instructor: %s", location, user.username)
@@ -488,7 +522,7 @@ class StaffGradedAssignmentXBlock(StudioEditableXBlockMixin, ShowAnswerXBlockMix
                     self.location
                 )
                 zip_file_time = get_file_modified_time_utc(zip_file_path)
-                log.info(
+                log.error(
                     "Zip file modified time: %s, last zip file time: %s for block: %s for instructor: %s",
                     last_assignment_date,
                     zip_file_time,
@@ -522,7 +556,6 @@ class StaffGradedAssignmentXBlock(StudioEditableXBlockMixin, ShowAnswerXBlockMix
         """
         Api for downloading zip file which consist of all students submissions.
         """
-        # pylint: disable=no-member
         require(self.is_course_staff())
         user = self.get_real_user()
         require(user)
@@ -541,7 +574,7 @@ class StaffGradedAssignmentXBlock(StudioEditableXBlockMixin, ShowAnswerXBlockMix
             return Response(
                 app_iter=file_contents_iter(zip_file_path),
                 content_type='application/zip',
-                content_disposition="attachment; filename=" + zip_file_name
+                content_disposition="attachment; filename=" + zip_file_name.encode('utf-8')
             )
         except IOError:
             return Response(
@@ -564,15 +597,64 @@ class StaffGradedAssignmentXBlock(StudioEditableXBlockMixin, ShowAnswerXBlockMix
             }
         )
 
+    @XBlock.handler
+    def download_grades(self, request, suffix=''):  # pylint: disable=unused-argument
+        """
+        Runs a async task that collects grades in background and format to csv them.
+        """
+        require(self.is_course_staff())
+
+        data = self.staff_grading_data()
+        max_score = data['max_score']
+
+        try:
+            assignments = data['assignments']
+            csv_file_name = get_csv_file_name(
+                self.block_course_id,
+                self.block_id
+            )
+            resp = Response(
+                content_type="text/csv",
+                content_disposition = 'attachment; filename=' + csv_file_name.encode('utf-8')
+            )
+            writer = csv.writer(resp)
+            writer.writerow(['Username', 'Name', 'Filename', 'Uploaded at', 'Fresh answer', 'Finalized', 'Grade Date', 'Grade', 'Max grade', 'Comment'])
+
+            #for row in assignments:
+            for row in reversed(assignments):
+                 username = row['username']
+                 fullname = row['fullname'].encode(encoding='UTF-8')
+                 filename = row['filename']
+                 timestamp = row['timestamp']
+                 fresh = row['fresh']
+                 finalized = row['finalized']
+                 date_fin = row['date_fin']
+                 score = row['score']
+                 comment = row['comment'].encode(encoding='UTF-8')
+
+                 writer.writerow([username, fullname, filename, timestamp, fresh, finalized, date_fin, score, max_score, comment])
+
+            return resp
+
+        except Exception:
+            return Response(
+                "Sorry, grades file cannot be create. Please contact {}.".format(settings.TECH_SUPPORT_EMAIL),
+                status_code=404
+            )
+
+
     def student_view(self, context=None):
         # pylint: disable=no-member
         """
         The primary view of the StaffGradedAssignmentXBlock, shown to students
         when viewing courses.
         """
+        spinner_url = self.runtime.local_resource_url(self, 'public/img/spinner.gif')
         context = {
+            'upload_grades_file_form' : UploadGradesFileForm(auto_id=True),
+            'spinner_url' : spinner_url,
             "student_state": json.dumps(self.student_state()),
-            "id": self.location.name.replace('.', '_'),
+            "id": self.location.block_id.replace('.', '_'),
             "max_file_size": self.student_upload_max_size(),
             "support_email": settings.TECH_SUPPORT_EMAIL
         }
@@ -582,7 +664,7 @@ class StaffGradedAssignmentXBlock(StudioEditableXBlockMixin, ShowAnswerXBlockMix
 
         fragment = Fragment()
         fragment.add_content(
-            render_template(
+            render_django_template(
                 'templates/staff_graded_assignment/show.html',
                 context
             )
@@ -597,8 +679,69 @@ class StaffGradedAssignmentXBlock(StudioEditableXBlockMixin, ShowAnswerXBlockMix
         """
         Render a form for editing this XBlock
         """
-        # this method only exists to provide context=None for backwards compat
         return super(StaffGradedAssignmentXBlock, self).studio_view(context)
+
+    @XBlock.handler
+    def upload_grades(self, request, context=None):
+        """Called when a staff has submitted an grades file.
+        Perform the file validation. If the file is valid grade students, otherwise
+        return the list of errors and offer the staff to upload a new file.
+        """
+        if not self.is_course_staff():
+            raise PermissionDenied
+        uploaded_file = request.POST['file'].file
+        form = UploadGradesFileForm(request.POST, files={'grades_file' : uploaded_file},
+                                        auto_id=True, sga_block=self)
+        if form.is_valid():
+            self.handle_grades_file(uploaded_file)
+            return Response(u"<div class='sga_success'>{}</div>".format(_("Thank you, the students grading has been done.")))
+        else:
+            return Response(loader.render_template("templates/staff_graded_assignment/form_errors.html",
+                                                   {'upload_grades_file_form' : form}))
+
+    def handle_grades_file(self, file):
+        """Read the file and set score and finalize flag and fresh flag and grade date and comment.
+        Note:
+            We expect a csv file following this structure:
+                +----------+------+----------+----------------------+--------------+-----------+----------------------+-------+-----------+----------+
+                | Username | Name | Filename | Uploaded at          | Fresh answer | Finalized | Grade Date           | Grade | Max grade | Comment  |
+                +----------+------+----------+----------------------+--------------+-----------+----------------------+-------+-----------+----------+
+                | student1 | S.St | 5.PNG    | 10-03-2020 16:01 MSK | False        | False     | 10-03-2020 16:05 MSK | 23    | 100       | bad work |
+                +----------+------+----------+----------------------+--------------+-----------+----------------------+-------+-----------+----------+
+                | student2 | Mary | 7.JPG    | 15-03-2020 11:01 MSK | True         | False     |                      |       | 100       |          |
+                +----------+------+----------+----------------------+--------------+-----------+----------------------+-------+-----------+----------+
+        Args:
+            file: The grades csv file.
+        """
+        grades_file = csv.DictReader(file, ['username', 'fullname', 'filename', 'timestamp', 'fresh', 'finalized', 'date_fin', 'score', 'max_score', 'comment'],
+                                     delimiter=',')
+        for line, row in enumerate(grades_file):
+            if line:
+                new = False
+                user = get_user_by_username_or_email(row['username'])
+                module = self.get_or_create_student_module(user)
+                state = json.loads(module.state)
+                if self.is_instructor():
+                    student_id = anonymous_id_for_user(user, CourseKey.from_string(self.block_course_id))
+                    submission = self.get_submission(student_id)
+                    if not submission:
+                        continue
+                    submissions_api.set_score(submission['uuid'], row['score'], self.max_score())
+                    submission_obj = Submission.objects.get(uuid=submission['uuid'])
+                    if submission_obj.answer['finalized'] != json.loads(row['finalized'].lower()):
+                        submission_obj.answer['finalized'] = json.loads(row['finalized'].lower())
+                        submission_obj.save()
+                        new = True
+                if state['staff_score'] != row['score'] or state['comment'].encode('utf-8') != row['comment']:
+                    new = True
+                state['staff_score'] = row['score']
+                state['comment'] = row['comment']
+                if new:
+                    state['date_fin'] = force_text(django_now())
+                    state['fresh'] = False
+                module.state = json.dumps(state)
+                module.save()
+
 
     def clear_student_state(self, *args, **kwargs):
         # pylint: disable=unused-argument
@@ -635,14 +778,14 @@ class StaffGradedAssignmentXBlock(StudioEditableXBlockMixin, ShowAnswerXBlockMix
         """
         Return the usage_id of the block.
         """
-        return six.text_type(self.scope_ids.usage_id)
+        return unicode(self.scope_ids.usage_id)
 
     @reify
     def block_course_id(self):
         """
         Return the course_id of the block.
         """
-        return six.text_type(self.course_id)
+        return unicode(self.course_id)
 
     def get_student_item_dict(self, student_id=None):
         # pylint: disable=no-member
@@ -723,7 +866,6 @@ class StaffGradedAssignmentXBlock(StudioEditableXBlockMixin, ShowAnswerXBlockMix
         Returns:
             StudentModule: A StudentModule object
         """
-        # pylint: disable=no-member
         student_module, created = StudentModule.objects.get_or_create(
             course_id=self.course_id,
             module_state_key=self.location,
@@ -768,12 +910,18 @@ class StaffGradedAssignmentXBlock(StudioEditableXBlockMixin, ShowAnswerXBlockMix
             solution = self.runtime.replace_urls(force_text(self.solution))
         else:
             solution = ''
-        # pylint: disable=no-member
+
+        if uploaded:
+            answer_checked = not self.fresh
+        else:
+            answer_checked = False
+
         return {
             "display_name": force_text(self.display_name),
             "uploaded": uploaded,
             "annotated": annotated,
             "graded": graded,
+            "answer_checked": answer_checked,
             "max_score": self.max_score(),
             "upload_allowed": self.upload_allowed(submission_data=submission),
             "solution": solution,
@@ -811,6 +959,11 @@ class StaffGradedAssignmentXBlock(StudioEditableXBlockMixin, ShowAnswerXBlockMix
                 else:
                     needs_approval = False
                 instructor = self.is_instructor()
+
+                date_fin = state.get('date_fin', None)
+                if date_fin is not None:
+                    date_fin = utc_to_local(datetime.datetime.strptime(date_fin, UNICODE_DATE_FORMAT)).strftime(DATETIME_FORMAT)
+
                 yield {
                     'module_id': student_module.id,
                     'student_id': student.student_id,
@@ -827,7 +980,9 @@ class StaffGradedAssignmentXBlock(StudioEditableXBlockMixin, ShowAnswerXBlockMix
                     'may_grade': instructor or not approved,
                     'annotated': force_text(state.get("annotated_filename", '')),
                     'comment': force_text(state.get("comment", '')),
-                    'finalized': is_finalized_submission(submission_data=submission)
+                    'finalized': is_finalized_submission(submission_data=submission),
+                    'date_fin': date_fin,
+                    'fresh': state.get("fresh", False)
                 }
 
         return {
@@ -849,7 +1004,7 @@ class StaffGradedAssignmentXBlock(StudioEditableXBlockMixin, ShowAnswerXBlockMix
             assignments.append({
                 'submission_id': submission['uuid'],
                 'filename': submission['answer']["filename"],
-                'timestamp': submission['submitted_at'] or submission['created_at']
+                'timestamp': submission['created_at']
             })
 
         assignments.sort(
@@ -862,14 +1017,11 @@ class StaffGradedAssignmentXBlock(StudioEditableXBlockMixin, ShowAnswerXBlockMix
         Return a file from storage and return in a Response.
         """
         try:
-            content_disposition = "attachment; filename*=UTF-8''"
-            content_disposition += six.moves.urllib.parse.quote(filename.encode('utf-8'))
-            output = Response(
+            return Response(
                 app_iter=file_contents_iter(path),
                 content_type=mime_type,
-                content_disposition=content_disposition
+                content_disposition="attachment; filename*=UTF-8''" + urllib.quote(filename.encode('utf-8'))
             )
-            return output
         except IOError:
             if require_staff:
                 return Response(
@@ -887,7 +1039,6 @@ class StaffGradedAssignmentXBlock(StudioEditableXBlockMixin, ShowAnswerXBlockMix
             )
 
     def validate_score_message(self, course_id, username):  # lint-amnesty, pylint: disable=missing-docstring
-        # pylint: disable=no-member
         log.error(
             "enter_grade: invalid grade submitted for course:%s module:%s student:%s",
             course_id,
@@ -961,7 +1112,6 @@ class StaffGradedAssignmentXBlock(StudioEditableXBlockMixin, ShowAnswerXBlockMix
         """
         returns True if zip file exists.
         """
-        # pylint: disable=no-member
         zip_file_path = get_zip_file_path(
             user.username,
             self.block_course_id,
@@ -974,7 +1124,6 @@ class StaffGradedAssignmentXBlock(StudioEditableXBlockMixin, ShowAnswerXBlockMix
         """
         returns number of files archive in zip.
         """
-        # pylint: disable=no-member
         zip_file_path = get_zip_file_path(
             user.username,
             self.block_course_id,
@@ -987,7 +1136,7 @@ class StaffGradedAssignmentXBlock(StudioEditableXBlockMixin, ShowAnswerXBlockMix
 
     def get_real_user(self):
         """returns session user"""
-        # pylint: disable=no-member
+
         if callable(self.runtime.get_real_user):
             real_user_object = self.runtime.get_real_user(self.xmodule_runtime.anonymous_student_id)
         else:
@@ -1026,7 +1175,7 @@ class StaffGradedAssignmentXBlock(StudioEditableXBlockMixin, ShowAnswerXBlockMix
 
     def has_finished(self):
         """
-        True if lector pushed button Finalized
+        True if instructor pushed button Finalized
         """
         submission = self.get_submission()
         if not submission:
@@ -1059,10 +1208,10 @@ def load_resource(resource_path):  # pragma: NO COVER
     Gets the content of a resource
     """
     resource_content = pkg_resources.resource_string(__name__, resource_path)
-    return six.text_type(resource_content)
+    return unicode(resource_content)
 
 
-def render_template(template_path, context=None):  # pragma: NO COVER
+def render_django_template(template_path, context=None):  # pragma: NO COVER
     """
     Evaluate a template by resource path, applying the provided context.
     """

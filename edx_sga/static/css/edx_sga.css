@@ -1,5 +1,37 @@
 /* CSS for StaffGradedAssignmentXBlock */
 
+.sga-block .errorlist {
+    color: red;
+}
+.sga-block .sga_success {
+    color: green;
+}
+.sga-block #spinner {
+    left-margin: 3px;
+}
+
+.sga-block .round {
+    width: 15px;
+    height: 15px;
+    margin: 0 auto;
+    border-radius: 50%;
+}
+
+.sga-block .round::before {
+    content: "";
+    display: inline-block;
+    vertical-align: middle;
+    padding-top: 100%;
+}
+
+.sga-block .green {
+    background: green;
+}
+
+.sga-block .silver {
+    background: silver;
+}
+
 .sga-block .staff-modal {
     position: fixed;
     z-index:100;

@@ -184,7 +184,7 @@ Create a branch of edx-platform to commit a few minor changes:
   - **Show Answer**: Specifies if and when the student will see the correct answer to the problem.
   - **Solution**: The solution that is shown to the student if Show Answer is enabled for the problem. 
   
-    ![sga settings](https://user-images.githubusercontent.com/8322892/36798686-48c41bc6-1c79-11e8-9ffb-d90a0169e69d.png)
+    ![sga settings](https://user-images.githubusercontent.com/39516501/76606801-fc565b00-6523-11ea-97ef-46f5e50d4d9f.PNG)
 
 5. Grading Policy
 
@@ -220,14 +220,16 @@ You can specify the following values for the show answer attribute.
     "Grade Submissions" button in the lower right corner of the XBlock (Be sure
     you are in "Staff View" indicated by a red label in the upper right corner of
     the page; if it says "Student View" in green, click on it once.)
+    Until staff member don't checked student's submission (leave comment or grade or
+    add annotated file) there is green flag Fresh answer.
 
-    ![Staff view of LMS interface](https://raw.githubusercontent.com/mitodl/edx-sga/screenshots/img/screenshot-lms-before-upload.png)
+    ![Staff view of LMS interface](https://user-images.githubusercontent.com/39516501/76606966-3d4e6f80-6524-11ea-9548-fedf065c2655.PNG)
 
 1. When you click "Grade Submissions" a grid of student submissions will display
     in a lightbox. Columns for username, (full) name, Filename and Uploaded
     (time) will be filled in.
 
-    ![Staff view of grading grid](https://raw.githubusercontent.com/mitodl/edx-sga/screenshots/img/screenshot-staff-grading-interface.png)
+    ![Staff view of grading grid](https://user-images.githubusercontent.com/39516501/76606651-b4cfcf00-6523-11ea-9420-36b6d65e5894.PNG)
 
 1. Click the filename in any row to download the student's submission. If it can
     be displayed in your browser, it will.
@@ -235,37 +237,21 @@ You can specify the following values for the show answer attribute.
 1. Click the **Enter grade** link to bring up an interface to enter grades and
     comments.
 
-    ![Enter grade interface](https://raw.githubusercontent.com/mitodl/edx-sga/screenshots/img/screenshot-staff-enter-grade.png)
+    ![Enter grade interface](https://user-images.githubusercontent.com/39516501/76607084-6969f080-6524-11ea-8996-f6b2d80500bf.PNG)
 
-1. The grades and comments will appear in the grid. Use the "Upload Annotated
-    File" button to upload a file in response to the student's submission. The
-    student will be able to view the file along with her grade.
+1. You can download CSV file (button Download All Grades) with all student grades, 
+    then change it (only fields Grade, Finalize and Comment will be changed) and 
+    upload (Upload Grades CSV File button).
 
-    ![Instructor view of grading grid after a submission has been graded.](https://raw.githubusercontent.com/mitodl/edx-sga/screenshots/img/screenshot-graded.png)
 
-1. Course staff can enter grades, but they are not final and students won't see
-    them until they are submitted by an instructor. When a grade is waiting for
-    instructor approval, it appears in the submissions grid with the text
-    `(Awaiting instructor approval)` after it.
+1. Student can see that instructor checked his work, score of submission
+    and instructor's comment.
+    
+    ![Student view](https://user-images.githubusercontent.com/39516501/76607203-9d451600-6524-11ea-9eef-51fb91b31d8a.PNG)
+    While staff member don't push the button Finalize student can upload new 
+    fixed work.
+    ![Student view](https://user-images.githubusercontent.com/39516501/76607228-a930d800-6524-11ea-8826-bc08cc1f986c.PNG)
 
-    ![Detail of Staff Member view of grading grid after a submission has been graded and it is awaiting approval.](https://raw.githubusercontent.com/mitodl/edx-sga/screenshots/img/screenshot-awaiting-approval.png)
-
-    After a course staff member has submitted a grade, the instructor will see a
-    link to **Approve grade** instead of **Enter grade**.
-
-    ![Detail of Instructor view of grading grid after a submission has been graded and it can be appproved.](https://raw.githubusercontent.com/mitodl/edx-sga/screenshots/img/screenshot-approve-grade.png)
-
-    Clicking **Approve grade** will open the same grading dialog box where, in
-    addition to approving the grade, she can change the grade and the comment.
-
-    Once the instructor has approved or entered a grade, course staff members
-    cannot change it. However, the instructor can always change a grade.
-
-1. After the grade has been approved, the student will be able to see it inline
-    and also in her progress page. Annotated files, if any, will be available
-    for download.
-
-    ![Student view of graded assignment with annotated instructor response](https://raw.githubusercontent.com/mitodl/edx-sga/screenshots/img/screenshot-lms-student-video-graded.png)
 
 ## Testing
 

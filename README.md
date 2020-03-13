@@ -248,7 +248,8 @@ You can specify the following values for the show answer attribute.
     and instructor's comment.
     
     ![Student view](https://user-images.githubusercontent.com/39516501/76607203-9d451600-6524-11ea-9eef-51fb91b31d8a.PNG)
-    While staff member don't push the button Finalize student can upload new 
+    
+1. While staff member don't push the button Finalize student can upload new 
     fixed work.
     ![Student view](https://user-images.githubusercontent.com/39516501/76607228-a930d800-6524-11ea-8826-bc08cc1f986c.PNG)
 

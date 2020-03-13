@@ -18,7 +18,19 @@ msgstr ""
 
 #: edx_sga/sga.py edx_sga/templates/staff_graded_assignment/show.html
 msgid "Staff Graded Assignment"
-msgstr ""
+msgstr "Проверяемое преподавателем задание"
+
+#: edx_sga/sga.py edx_sga/templates/staff_graded_assignment/show.html
+msgid "Upload Grades CSV File"
+msgstr "Загрузить CSV отчет оценок"
+
+#: edx_sga/sga.py edx_sga/templates/staff_graded_assignment/show.html
+msgid "Download All Submissions"
+msgstr "Выгрузить все файлы ответов"
+
+#: edx_sga/sga.py edx_sga/templates/staff_graded_assignment/show.html
+msgid "Download All Grades"
+msgstr "Выгрузить CSV отчет оценок"
 
 #: edx_sga/sga.py
 msgid "This name appears in the horizontal navigation at the top of the page."
@@ -36,7 +48,7 @@ msgstr ""
 
 #: edx_sga/sga.py
 msgid "Maximum score"
-msgstr ""
+msgstr "Максимальный балл"
 
 #: edx_sga/sga.py
 msgid "Maximum grade score given to assignment by staff."
@@ -51,8 +63,8 @@ msgid "Score will need to be approved by instructor before being published."
 msgstr ""
 
 #: edx_sga/sga.py edx_sga/templates/staff_graded_assignment/show.html
-msgid "Instructor comment"
-msgstr ""
+msgid "Instructor comment:"
+msgstr "Комментарий преподавателя:"
 
 #: edx_sga/sga.py
 msgid "Feedback given to student by instructor."
@@ -89,40 +101,48 @@ msgstr ""
 
 #: edx_sga/sga.py
 msgid "When the annotated file was uploaded"
-msgstr ""
+msgstr "Файл с замечаниями был загружен"
 
 #: edx_sga/templates/staff_graded_assignment/edit.html
 msgid "Settings"
-msgstr ""
+msgstr "Настройки"
 
 #: edx_sga/templates/staff_graded_assignment/show.html
 msgid "File uploaded"
-msgstr ""
+msgstr "Загруженный файл"
 
 #: edx_sga/templates/staff_graded_assignment/show.html
 msgid "No file has been uploaded."
-msgstr ""
+msgstr "Файл не был загружен."
 
 #: edx_sga/templates/staff_graded_assignment/show.html
 #, python-format
-msgid "Your score is %(graded_score)s / %(max_score)s"
-msgstr ""
+msgid "Your score is"
+msgstr "Ваш балл"
 
 #: edx_sga/templates/staff_graded_assignment/show.html
 msgid "Annotated file from instructor"
-msgstr ""
+msgstr "Замечания от преподавателя"
 
 #: edx_sga/templates/staff_graded_assignment/show.html
 msgid "This assignment has not yet been graded."
-msgstr ""
+msgstr "Работа пока не была оценена."
 
 #: edx_sga/templates/staff_graded_assignment/show.html
 msgid "Upload a different file"
-msgstr ""
+msgstr "Загрузить исправленную версию работы"
+
+#: edx_sga/templates/staff_graded_assignment/show.html
+msgid "Answer already checked by instructor"
+msgstr "Задание проверено"
+
+#: edx_sga/templates/staff_graded_assignment/show.html
+msgid "Answer not yet checked by instructor"
+msgstr "Задание не проверено"
 
 #: edx_sga/templates/staff_graded_assignment/show.html
 msgid "Upload your assignment"
-msgstr ""
+msgstr "Загрузить свою работу"
 
 #: edx_sga/templates/staff_graded_assignment/show.html
 msgid "Select a file"
@@ -138,7 +158,15 @@ msgstr ""
 
 #: edx_sga/templates/staff_graded_assignment/show.html
 msgid "Filename"
-msgstr ""
+msgstr "Файл"
+
+#: edx_sga/templates/staff_graded_assignment/show.html
+msgid "Fresh answer"
+msgstr "Новое решение"
+
+#: edx_sga/templates/staff_graded_assignment/show.html
+msgid "Grade date"
+msgstr "Дата оценивания"
 
 #: edx_sga/templates/staff_graded_assignment/show.html
 msgid "Uploaded"
@@ -146,15 +174,15 @@ msgstr ""
 
 #: edx_sga/templates/staff_graded_assignment/show.html
 msgid "Grade"
-msgstr ""
+msgstr "Оценка"
 
 #: edx_sga/templates/staff_graded_assignment/show.html
 msgid "Instructor's comments"
-msgstr ""
+msgstr "Комментарий преподавателя"
 
 #: edx_sga/templates/staff_graded_assignment/show.html
 msgid "Annotated"
-msgstr ""
+msgstr "Замечание"
 
 #: edx_sga/templates/staff_graded_assignment/show.html
 msgid "Actions"
@@ -170,15 +198,15 @@ msgstr ""
 
 #: edx_sga/templates/staff_graded_assignment/show.html
 msgid "Enter grade"
-msgstr ""
+msgstr "Оценить"
 
 #: edx_sga/templates/staff_graded_assignment/show.html
 msgid "Upload annotated file"
-msgstr ""
+msgstr "Загрузить файл с замечаниями"
 
 #: edx_sga/templates/staff_graded_assignment/show.html
 msgid "Grade Submissions"
-msgstr ""
+msgstr "Оценивание поступивших работ"
 
 #: edx_sga/templates/staff_graded_assignment/show.html
 msgid "Staff Debug Info"
@@ -186,7 +214,7 @@ msgstr ""
 
 #: edx_sga/templates/staff_graded_assignment/show.html
 msgid "Loading..."
-msgstr ""
+msgstr "Загружаем..."
 
 #: edx_sga/templates/staff_graded_assignment/show.html
 msgid "Staff Debug"
@@ -210,20 +238,20 @@ msgstr ""
 
 #: edx_sga/templates/staff_graded_assignment/show.html
 msgid "Enter Grade"
-msgstr ""
+msgstr "Оценить"
 
 #: edx_sga/templates/staff_graded_assignment/show.html
 #, python-format
 msgid "Grade for %(student_name)s"
-msgstr ""
+msgstr "Оценка для %(student_name)s"
 
 #: edx_sga/templates/staff_graded_assignment/show.html
 msgid "Grade:"
-msgstr ""
+msgstr "Оценка:"
 
 #: edx_sga/templates/staff_graded_assignment/show.html
 msgid "Comment:"
-msgstr ""
+msgstr "Комментарий:"
 
 #: edx_sga/templates/staff_graded_assignment/show.html
 msgid "Submit"
@@ -243,7 +271,7 @@ msgstr ""
 
 #: edx_sga/templates/staff_graded_assignment/show.html
 msgid "Remove grade"
-msgstr ""
+msgstr "Удалить оценку"
 
 msgid "Only fields Grade, Finalized and Comment should be changed."
 msgstr "Будут изменены только значения оценки, флаг принятой работы (Finalized) и комментарий к работе."
@@ -253,6 +281,3 @@ msgstr "Файл оценок содержит ошибки, исправьте 
 
 msgid "Thank you, the students grading has been done."
 msgstr "Спасибо, оценивание успешно завершено."
-
-msgid "Grade date"
-msgstr "Дата выставления оценки"

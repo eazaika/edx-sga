@@ -484,6 +484,7 @@ class StaffGradedAssignmentXBlock(StudioEditableXBlockMixin, ShowAnswerXBlockMix
         state = json.loads(module.state)
         state['staff_score'] = None
         state['comment'] = ''
+        state['fresh'] = True
         state['date_fin'] = None
         state['annotated_sha1'] = None
         state['annotated_filename'] = None
@@ -620,11 +621,10 @@ class StaffGradedAssignmentXBlock(StudioEditableXBlockMixin, ShowAnswerXBlockMix
             writer = csv.writer(resp)
             writer.writerow(['Username', 'Name', 'Filename', 'Uploaded at', 'Fresh answer', 'Finalized', 'Grade Date', 'Grade', 'Max grade', 'Comment'])
 
-            #for row in assignments:
             for row in reversed(assignments):
                  username = row['username']
                  fullname = row['fullname'].encode(encoding='UTF-8')
-                 filename = row['filename']
+                 filename = row['filename'].encode(encoding='UTF-8')
                  timestamp = row['timestamp']
                  fresh = row['fresh']
                  finalized = row['finalized']
@@ -1061,7 +1061,8 @@ class StaffGradedAssignmentXBlock(StudioEditableXBlockMixin, ShowAnswerXBlockMix
         """
         Check if user role is instructor.
         """
-        return self.xmodule_runtime.get_user_role() == 'instructor'
+        user_role = self.xmodule_runtime.get_user_role()
+        return user_role == 'instructor' or user_role == 'staff'
 
     def show_staff_grading_interface(self):
         """

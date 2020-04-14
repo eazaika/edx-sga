@@ -132,7 +132,7 @@ def get_zip_file_name(username, course_id, block_id):
     """
     return "{username}_submissions_{id}_{course_key}.zip".format(
         username=username,
-        id=hashlib.md5(block_id).hexdigest(),
+        id=hashlib.md5(block_id.encode('utf-8')).hexdigest(),
         course_key=course_id
     )
 

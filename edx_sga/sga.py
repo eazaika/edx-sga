@@ -715,32 +715,39 @@ class StaffGradedAssignmentXBlock(StudioEditableXBlockMixin, ShowAnswerXBlockMix
         """
         grades_file = csv.DictReader(file, ['username', 'fullname', 'filename', 'timestamp', 'fresh', 'finalized', 'date_fin', 'score', 'max_score', 'comment'],
                                      delimiter=',')
-        require(self.is_course_staff())
         for line, row in enumerate(grades_file):
             if line:
-                new = False
                 user = get_user_by_username_or_email(row['username'])
                 module = self.get_or_create_student_module(user)
                 state = json.loads(module.state)
                 student_id = anonymous_id_for_user(user, CourseKey.from_string(self.block_course_id))
                 score = submissions_api.get_score(self.get_student_item_dict(student_id))
-                if not score:
-                    continue
-                if score['points_earned'] != row['score']:
-                    submissions_api.set_score(score['submission_uuid'], row['score'], self.max_score())
+                new = False
+                if score and score['points_earned'] == row['score']:
+                    pass
+                elif score or row['score']:
                     new = True
-                submission_obj = Submission.objects.get(uuid=score['submission_uuid'])
+
+                submission = self.get_submission(student_id)
+                if not submission:
+                    continue
+                uuid = submission['uuid']
+
+                if new:
+                    submissions_api.set_score(uuid, row['score'], self.max_score())
+                submission_obj = Submission.objects.get(uuid=uuid)
                 if submission_obj.answer['finalized'] != json.loads(row['finalized'].lower()):
                     submission_obj.answer['finalized'] = json.loads(row['finalized'].lower())
                     submission_obj.save()
                     new = True
-                try:
-                    if state['comment'].encode('utf-8') != row['comment']:
+                if row['comment']:
+                    try:
+                        if state['comment'].encode('utf-8') != row['comment']:
+                            new = True
+                            state['comment'] = row['comment']
+                    except:
+                        state.update({'comment': row['comment']})
                         new = True
-                        state['comment'] = row['comment']
-                except:
-                    state.update({'comment': row['comment']})
-                    new = True
                 if new:
                     state['date_fin'] = force_text(django_now())
                     state['fresh'] = False

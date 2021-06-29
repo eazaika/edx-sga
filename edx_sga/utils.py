@@ -97,6 +97,19 @@ def get_sha1(file_descriptor):
     return sha1.hexdigest()
 
 
+def get_sha2(file_descriptor):
+    """
+    Get file hex digest (fingerprint).
+    """
+    sha256 = hashlib.sha256()
+    for block in iter(partial(file_descriptor.read, BLOCK_SIZE), ''):
+        sha256.update(block)
+    file_descriptor.seek(0)
+    return sha256.hexdigest()
+
+def size_of_file(file_descriptor):
+    return len(file_descriptor.read())
+
 def get_file_storage_path(locator, file_hash, original_filename):
     """
     Returns the file path for an uploaded SGA submission file

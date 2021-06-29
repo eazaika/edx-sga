@@ -53,6 +53,8 @@ from edx_sga.tasks import (
 )
 from edx_sga.utils import (
     get_sha1,
+    get_sha2,
+    size_of_file,
     utcnow,
     utc_to_local,
     is_finalized_submission,
@@ -302,6 +304,18 @@ class StaffGradedAssignmentXBlock(StudioEditableXBlockMixin, ShowAnswerXBlockMix
         default_storage.save(path, File(upload.file))
         freshen_answer(module, True)
         self.fresh = True
+
+        from eventtracking import tracker
+        data = {
+            'username': user.username,
+            'course_id': self.block_course_id,
+            'type': answer['mimetype'],
+            'filename': answer['filename'],
+            'sha2': get_sha2(upload.file),
+            'size': size_of_file(upload.file),
+        }
+        tracker.emit('edx.attachment', data)
+
         return Response(json_body=self.student_state())
 
     @XBlock.handler
@@ -718,29 +732,36 @@ class StaffGradedAssignmentXBlock(StudioEditableXBlockMixin, ShowAnswerXBlockMix
         require(self.is_course_staff())
         for line, row in enumerate(grades_file):
             if line:
-                new = False
                 user = get_user_by_username_or_email(row['username'])
                 module = self.get_or_create_student_module(user)
                 state = json.loads(module.state)
                 student_id = anonymous_id_for_user(user, CourseKey.from_string(self.block_course_id))
                 score = submissions_api.get_score(self.get_student_item_dict(student_id))
-                if not score:
-                    continue
-                if score['points_earned'] != row['score']:
-                    submissions_api.set_score(score['submission_uuid'], row['score'], self.max_score())
+                new = False
+                if score and score['points_earned'] == row['score']:
+                    pass
+                elif score or row['score']:
                     new = True
-                submission_obj = Submission.objects.get(uuid=score['submission_uuid'])
+
+                submission = self.get_submission(student_id)
+                if not submission:
+                    continue
+                uuid = submission['uuid']
+                if new:
+                    submissions_api.set_score(uuid, row['score'], self.max_score())
+                submission_obj = Submission.objects.get(uuid=uuid)
                 if submission_obj.answer['finalized'] != json.loads(row['finalized'].lower()):
                     submission_obj.answer['finalized'] = json.loads(row['finalized'].lower())
                     submission_obj.save()
                     new = True
-                try:
-                    if state['comment'].encode('utf-8') != row['comment']:
+                if row['comment']:
+                    try:
+                        if state['comment'].encode('utf-8') != row['comment']:
+                            new = True
+                            state['comment'] = row['comment']
+                    except:
+                        state.update({'comment': row['comment']})
                         new = True
-                        state['comment'] = row['comment']
-                except:
-                    state.update({'comment': row['comment']})
-                    new = True
                 if new:
                     state['date_fin'] = force_text(django_now())
                     state['fresh'] = False
@@ -974,7 +995,7 @@ class StaffGradedAssignmentXBlock(StudioEditableXBlockMixin, ShowAnswerXBlockMix
                     'student_id': student.student_id,
                     'submission_id': submission['uuid'],
                     'username': student_module.student.username,
-                    'fullname': student_module.student.profile.name,
+                    'fullname': student_module.student.last_name + ' ' + student_module.student.first_name,
                     'filename': submission['answer']["filename"],
                     'timestamp': utc_to_local(submission['created_at']).strftime(
                         DATETIME_FORMAT

@@ -729,7 +729,6 @@ class StaffGradedAssignmentXBlock(StudioEditableXBlockMixin, ShowAnswerXBlockMix
         """
         grades_file = csv.DictReader(file, ['username', 'fullname', 'filename', 'timestamp', 'fresh', 'finalized', 'date_fin', 'score', 'max_score', 'comment'],
                                      delimiter=',')
-        require(self.is_course_staff())
         for line, row in enumerate(grades_file):
             if line:
                 user = get_user_by_username_or_email(row['username'])
